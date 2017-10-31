@@ -31,10 +31,10 @@ public class JavaKeyStoreTest {
     @Test
     public void test() throws KeyStoreException, SecretStoreException, InterruptedException {
 
-        char[] initSecret = keyStore.retrieveSecret(new SecretIdentifier.Builder("logstash").key("init").build());
+        char[] initSecret = keyStore.retrieveSecret(new SecretIdentifier("init"));
         System.out.println(initSecret);
 
-        SecretIdentifier fooId = new SecretIdentifier.Builder("logstash").key("foo").build();
+        SecretIdentifier fooId = new SecretIdentifier("foo");
         keyStore.persistSecret(fooId, "foo".toCharArray());
         System.out.println(keyStore.retrieveSecret(fooId));
 

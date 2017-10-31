@@ -35,36 +35,40 @@ public final class JavaKeyStore implements SecretStore {
     private final static Logger LOGGER = LoggerFactory.getLogger(JavaKeyStore.class);
     private final char[] keyStorePass;
 
-    public JavaKeyStore(Path keyStorePath, char[] keyStorePass) throws KeyStoreException {
-        this.keyStorePath = keyStorePath;
-        String keyStoreType = System.getProperty("java.keystore.type", "pkcs12");
-        this.keyStore = KeyStore.getInstance(keyStoreType);
-        this.keyStorePass = keyStorePass;
+    public JavaKeyStore(Path keyStorePath, char[] keyStorePass) throws SecretStoreException {
+        try {
+            this.keyStorePath = keyStorePath;
+            String keyStoreType = System.getProperty("java.keystore.type", "pkcs12");
+            this.keyStore = KeyStore.getInstance(keyStoreType);
+            this.keyStorePass = keyStorePass;
 
-        protectionParameter = new PasswordProtection(keyStorePass);
+            protectionParameter = new PasswordProtection(keyStorePass);
 
-        try (final InputStream is = Files.newInputStream(keyStorePath)) {
-            keyStore.load(is, keyStorePass);
-        } catch (NoSuchFileException noSuchFileException) {
-            LOGGER.warn("Keystore not found at {}. Creating new keystore.", keyStorePath.toAbsolutePath().toString());
+            try (final InputStream is = Files.newInputStream(keyStorePath)) {
+                keyStore.load(is, keyStorePass);
+            } catch (NoSuchFileException noSuchFileException) {
+                LOGGER.warn("Keystore not found at {}. Creating new keystore.", keyStorePath.toAbsolutePath().toString());
 
-            try {
-                try (final OutputStream os = Files.newOutputStream(keyStorePath)) {
-                    keyStore = KeyStore.Builder.newInstance(keyStoreType, null, protectionParameter).getKeyStore();
-                    SecretIdentifier secretIdentifier = new SecretIdentifier.Builder("logstash").key("init").build();
-                    SecretKeyFactory factory = SecretKeyFactory.getInstance("PBE");
-                    SecretKey secretKey = factory.generateSecret(new PBEKeySpec(LocalDateTime.now().toString().toCharArray()));
-                    keyStore.setEntry(secretIdentifier.toExternalForm(), new KeyStore.SecretKeyEntry(secretKey), protectionParameter);
-                    keyStore.store(os, keyStorePass);
+                try {
+                    try (final OutputStream os = Files.newOutputStream(keyStorePath)) {
+                        keyStore = KeyStore.Builder.newInstance(keyStoreType, null, protectionParameter).getKeyStore();
+                        SecretIdentifier secretIdentifier = new SecretIdentifier("init");
+                        SecretKeyFactory factory = SecretKeyFactory.getInstance("PBE");
+                        SecretKey secretKey = factory.generateSecret(new PBEKeySpec(LocalDateTime.now().toString().toCharArray()));
+                        keyStore.setEntry(secretIdentifier.toExternalForm(), new KeyStore.SecretKeyEntry(secretKey), protectionParameter);
+                        keyStore.store(os, keyStorePass);
 
-                    //todo: enforce file permissions
+                        //todo: enforce file permissions
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
+
             } catch (Exception e) {
                 e.printStackTrace();
             }
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        }catch (Exception e){
+            throw new SecretStoreException();
         }
     }
 
@@ -134,7 +138,7 @@ public final class JavaKeyStore implements SecretStore {
     }
 
 
-    final private void clearSecret(char[] secret) {
+    private void clearSecret(char[] secret) {
         if (secret != null) {
             for (int i = 0; i < secret.length; ++i) {
                 secret[i] = '\0';
