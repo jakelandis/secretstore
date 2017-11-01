@@ -32,7 +32,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * <p>This class is threadsafe.</p>
  */
 public final class JavaKeyStore implements SecretStore {
-    static final String MARKER = "logstash-key-store";
+    public static final String LOGSTASH_MARKER = "logstash-key-store";
     private final static Logger LOGGER = LoggerFactory.getLogger(JavaKeyStore.class);
     private final char[] keyStorePass;
     private final Path keyStorePath;
@@ -59,7 +59,7 @@ public final class JavaKeyStore implements SecretStore {
             readLock = readWriteLock.readLock();
             writeLock = readWriteLock.writeLock();
             this.protectionParameter = new PasswordProtection(keyStorePass);
-            SecretIdentifier logstashMarker = new SecretIdentifier(MARKER);
+            SecretIdentifier logstashMarker = new SecretIdentifier(LOGSTASH_MARKER);
 
             try (final InputStream is = Files.newInputStream(keyStorePath)) {
                 keyStore.load(is, keyStorePass);
@@ -74,7 +74,7 @@ public final class JavaKeyStore implements SecretStore {
                 try (final OutputStream os = Files.newOutputStream(keyStorePath)) {
                     keyStore = KeyStore.Builder.newInstance(keyStoreType, null, protectionParameter).getKeyStore();
                     SecretKeyFactory factory = SecretKeyFactory.getInstance("PBE");
-                    byte[] base64 = Base64.getEncoder().encode(MARKER.getBytes(StandardCharsets.UTF_8));
+                    byte[] base64 = Base64.getEncoder().encode(LOGSTASH_MARKER.getBytes(StandardCharsets.UTF_8));
                     SecretKey secretKey = factory.generateSecret(new PBEKeySpec(asciiBytesToChar(base64)));
                     keyStore.setEntry(logstashMarker.toExternalForm(), new KeyStore.SecretKeyEntry(secretKey), protectionParameter);
                     keyStore.store(os, keyStorePass);
@@ -88,6 +88,36 @@ public final class JavaKeyStore implements SecretStore {
         } catch (Exception e) {
             throw new SecretStoreException("Error while construction the JavaKeyStore", e);
         }
+    }
+
+    /**
+     * Converts bytes from ascii encoded text to a char[] and zero outs the original byte[]
+     *
+     * @param bytes the bytes from an ascii encoded text (note - no validation is done to ensure ascii encoding)
+     * @return the corresponding char[]
+     */
+    private char[] asciiBytesToChar(byte[] bytes) {
+        char[] chars = new char[bytes.length];
+        for (int i = 0; i < bytes.length; i++) {
+            chars[i] = (char) bytes[i];
+            bytes[i] = '\0';
+        }
+        return chars;
+    }
+
+    /**
+     * Converts characters from ascii encoded text to a byte[] and zero outs the original char[]
+     *
+     * @param chars the chars from an ascii encoded text (note - no validation is done to ensure ascii encoding)
+     * @return the corresponding byte[]
+     */
+    private byte[] asciiCharToBytes(char[] chars) {
+        byte[] bytes = new byte[chars.length];
+        for (int i = 0; i < chars.length; i++) {
+            bytes[i] = (byte) chars[i];
+            chars[i] = '\0';
+        }
+        return bytes;
     }
 
     /**
@@ -139,11 +169,10 @@ public final class JavaKeyStore implements SecretStore {
                 clearSecret(secret);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            throw new SecretStoreException.PersistException(identifier, e);
         } finally {
             writeLock.unlock();
         }
-
     }
 
     @Override
@@ -153,12 +182,14 @@ public final class JavaKeyStore implements SecretStore {
             try (final InputStream is = Files.newInputStream(keyStorePath)) {
                 keyStore.load(is, keyStorePass);
                 keyStore.deleteEntry(identifier.toExternalForm());
+            } catch (Exception e) {
+                e.printStackTrace();
             }
             try (final OutputStream os = Files.newOutputStream(keyStorePath)) {
                 keyStore.store(os, keyStorePass);
             }
         } catch (Exception e) {
-            throw new SecretStoreException("TODO", e);
+            throw new SecretStoreException.PurgeException(identifier, e);
         } finally {
             writeLock.unlock();
         }
@@ -179,37 +210,17 @@ public final class JavaKeyStore implements SecretStore {
                     }
                     PBEKeySpec passwordBasedKeySpec = (PBEKeySpec) factory.getKeySpec(secretKeyEntry.getSecretKey(), PBEKeySpec.class);
                     //base64 encoded char[]
-                    char[] secret = passwordBasedKeySpec.getPassword().clone();
+                    char[] base64secret = passwordBasedKeySpec.getPassword().clone();
+                    byte[] secret = Base64.getDecoder().decode(asciiCharToBytes(base64secret));
                     passwordBasedKeySpec.clearPassword();
-                    return Base64.getDecoder().decode(asciiCharToBytes(secret));
+                    return secret;
                 }
             } catch (Exception e) {
-                e.printStackTrace();
-                throw new SecretStoreException("TODO", e);
+                throw new SecretStoreException.RetrievalException(identifier, e);
             } finally {
                 readLock.unlock();
             }
         }
         return null;
     }
-
-    private char[] asciiBytesToChar(byte[] bytes){
-        char[] chars = new char[bytes.length];
-        for (int i = 0; i < bytes.length; i++) {
-            chars[i] = (char) bytes[i];
-            bytes[i] = '\0';
-        }
-        return chars;
-    }
-
-    private byte[] asciiCharToBytes(char[] chars){
-        byte[] bytes = new byte[chars.length];
-        for (int i = 0; i < chars.length; i++) {
-            bytes[i] = (byte) chars[i];
-            chars[i] = '\0';
-        }
-        return bytes;
-
-    }
-
 }

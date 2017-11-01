@@ -2,6 +2,7 @@ package org.logstash.secret;
 
 
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * <p>A URN based identifier for a given secret. The URN is constructed as such: {@code urn:logstash:secret:v1:<key>}</p>
@@ -9,8 +10,10 @@ import java.util.Locale;
  */
 public class SecretIdentifier {
 
-    private final String key;
+    private final static Pattern colonPattern = Pattern.compile(":");
+    private final static Pattern urnPattern = Pattern.compile("urn:logstash:secret:v1:.*$");
     private final String VERSION = "v1";
+    private final String key;
 
     /**
      * Constructor
@@ -25,12 +28,39 @@ public class SecretIdentifier {
      * Converts an external URN format to a {@link SecretIdentifier} object.
      *
      * @param urn The {@link String} formatted identifier obtained originally from {@link SecretIdentifier#toExternalForm()}
-     * @return The {@link SecretIdentifier} object used to identify secrets.
+     * @return The {@link SecretIdentifier} object used to identify secrets, null if not valid external form.
      */
     public static SecretIdentifier fromExternalForm(String urn) {
-        String[] tokens = urn.split(":");
-        String key = tokens[tokens.length - 1];
-        return new SecretIdentifier(key);
+        if (urn == null || !urnPattern.matcher(urn).matches()) {
+            return null;
+        }
+        String[] parts = colonPattern.split(urn, 5);
+        return new SecretIdentifier(validateWithTransform(parts[4], "key"));
+    }
+
+    /**
+     * Minor validation and transformation on input. Converts ":" to "_" to avoid URN conflicts, and downcases the parts
+     *
+     * @param part     The part of the URN to validate
+     * @param partName The name of the part used for logging.
+     * @return The validated and transformed part.
+     */
+    private static String validateWithTransform(String part, String partName) {
+        if (part == null || part.isEmpty()) {
+            throw new IllegalArgumentException(String.format("%s may not be null or empty", partName));
+        }
+        return part.replace(":", "_").toLowerCase(Locale.US);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        SecretIdentifier that = (SecretIdentifier) o;
+
+        if (key != null ? !key.equals(that.key) : that.key != null) return false;
+        return VERSION != null ? VERSION.equals(that.VERSION) : that.VERSION == null;
     }
 
     /**
@@ -40,6 +70,13 @@ public class SecretIdentifier {
      */
     public String getKey() {
         return key;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = key != null ? key.hashCode() : 0;
+        result = 31 * result + (VERSION != null ? VERSION.hashCode() : 0);
+        return result;
     }
 
     /**
@@ -61,37 +98,5 @@ public class SecretIdentifier {
     @Override
     public String toString() {
         return toExternalForm();
-    }
-
-    /**
-     * Minor validation and transformation on input. Converts ":" to "_" to avoid URN conflicts, and downcases the parts
-     *
-     * @param part     The part of the URN to validate
-     * @param partName The name of the part used for logging.
-     * @return The validated and transformed part.
-     */
-    private String validateWithTransform(String part, String partName) {
-        if (part == null || part.isEmpty()) {
-            throw new IllegalArgumentException(String.format("{} may not be null or empty", partName));
-        }
-        return part.replace(":", "_").toLowerCase(Locale.US);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        SecretIdentifier that = (SecretIdentifier) o;
-
-        if (key != null ? !key.equals(that.key) : that.key != null) return false;
-        return VERSION != null ? VERSION.equals(that.VERSION) : that.VERSION == null;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = key != null ? key.hashCode() : 0;
-        result = 31 * result + (VERSION != null ? VERSION.hashCode() : 0);
-        return result;
     }
 }

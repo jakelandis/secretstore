@@ -7,6 +7,7 @@ import java.util.Collection;
 /**
  * <p>Contract with a store that can persist, retrieve, and purge sensitive data.</p>
  * <p>Implementations <strong>MUST</strong> ensure proper security for the storage of the secrets.</p>
+ * <p>Any of the methods may throw a {@link SecretStoreException} if errors are encountered. </p>
  */
 public interface SecretStore {
 
@@ -18,7 +19,7 @@ public interface SecretStore {
     Collection<SecretIdentifier> list();
 
     /**
-     * Persist a new text based secret to the store.
+     * Persist a secret to the store. Implementations should overwrite existing secrets with same identifier without error unless explicitly documented otherwise.
      *
      * @param id     The {@link SecretIdentifier} to identify the secret to persist
      * @param secret The byte[] representation of the secret.
@@ -33,10 +34,10 @@ public interface SecretStore {
     void purgeSecret(SecretIdentifier id);
 
     /**
-     * Retrieves a text based secret.
+     * Retrieves a secret.
      *
      * @param id The {@link SecretIdentifier} to identify the secret to retrieve
-     * @return the byte[] of the secret, null if no secret is found, or {@link SecretStoreException} if error occurred while trying to retrieve the secret.
+     * @return the byte[] of the secret, null if no secret is found.
      */
     byte[] retrieveSecret(SecretIdentifier id);
 
