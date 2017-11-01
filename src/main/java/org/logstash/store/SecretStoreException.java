@@ -1,18 +1,18 @@
 package org.logstash.store;
 
-public class SecretStoreException extends Exception {
+public class SecretStoreException extends RuntimeException {
 
-    //thrown when duplicate keys are found
-    class DuplicateKey extends SecretStoreException{
-
+    public SecretStoreException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    //thrown when trying to persist using a partial Urn
-    class PartialUrn extends SecretStoreException{
-
+    public SecretStoreException(String message) {
+        super(message);
     }
-    //thrown when can not find Urn in store
-    class UnsatisfiableUrn extends SecretStoreException{
 
+    static public class NotLogstashKeyStore extends SecretStoreException {
+        public NotLogstashKeyStore(String message) {
+            super(message);
+        }
     }
 }
